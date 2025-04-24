@@ -1,0 +1,41 @@
+import cv2
+import urllib.request
+import numpy as np
+import requests
+
+# Classificadores
+f_cas = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+url = 'http://192.168.137.154/capture'  # URL da ESP32-CAM
+flask_url = 'http://192.168.137.121:5000/upload'  # IP do seu PC com Flask
+
+cv2.namedWindow("Live Transmission", cv2.WINDOW_AUTOSIZE)
+
+while True:
+    try:
+        img_resp = urllib.request.urlopen(url)
+        imgnp = np.array(bytearray(img_resp.read()), dtype=np.uint8)
+        img = cv2.imdecode(imgnp, -1)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        faces = f_cas.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+
+        for (x, y, w, h) in faces:
+            face_img = img[y:y+h, x:x+w]
+            _, img_encoded = cv2.imencode('.jpg', face_img)
+
+            # Envia para o Flask
+            response = requests.post(flask_url, data=img_encoded.tobytes())
+            name = response.text
+
+            # Exibe o nome na imagem
+            cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            cv2.putText(img, name, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
+
+        cv2.imshow("Live Transmission", img)
+    except Exception as e:
+        print(f"Erro: {e}")
+
+    if cv2.waitKey(5) == ord('q'):
+        break
+
+cv2.destroyAllWindows()
